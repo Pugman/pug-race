@@ -39,7 +39,14 @@ if (!file) {
 // It runs in its own context, as a plain script, exactly as in the browser:
 // top-level functions become globals, so the fingerprint resolves them by name.
 var self = fs.readFileSync(__filename, "utf8");
-var core = self.slice(self.indexOf("// @@core:begin\n") + 16, self.indexOf("// @@core:end\n"));
+/* The markers are matched with \r?\n. Searching for an exact "\n" found
+   nothing in a CRLF checkout (git's autocrlf on Windows): indexOf returned -1,
+   slice(15, -1) handed the vm this whole file, shebang included, and the
+   script died with "node is not defined". This is the one check the operator
+   does not control, so it must either run or say plainly that it cannot. */
+var mB = /\/\/ @@core:begin\r?\n/.exec(self), mE = /\/\/ @@core:end\r?\n/.exec(self);
+if (!mB || !mE || mE.index < mB.index) die("this copy of verify.js is damaged: its @@core markers are missing or out of order");
+var core = self.slice(mB.index + mB[0].length, mE.index);
 var C = vm.createContext({ globalThis: null });
 C.globalThis = C;
 vm.runInContext('"use strict";\n' + core, C, { filename: "verify.js (core)" });

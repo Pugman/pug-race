@@ -203,6 +203,9 @@
               <button class="btn" id="clearNames">Clear</button>
               <span id="nameCount" class="note" style="margin:0 0 0 auto"></span>
             </div>
+            <div class="row hidden" id="dedupeRow" style="margin-top:8px">
+              <button class="btn" id="dedupeNames">Deduplicate — number the repeats</button>
+            </div>
             <div class="note" id="nameWarn" style="line-height:1.6"></div>
           </div>
 
@@ -233,6 +236,7 @@
               <button class="chip" data-animal="duck">🦆 Ducks</button>
               <button class="chip" data-animal="boomer">🧓 Boomers</button>
               <button class="chip" data-animal="turtle">🐢 Turtles</button>
+              <button class="chip" data-animal="bunny">🐰 Bunnies</button>
             </div>
           </div>
 
@@ -362,6 +366,7 @@
           <button class="btn primary" id="revealBtn">Reveal secret &amp; publish receipt</button>
           <button class="btn" id="postBtn">Generate Results Post</button>
           <button class="btn" id="csvBtn">Download full standings (CSV)</button>
+          <button class="btn" id="resVerifyBtn">Check this race yourself</button>
           <button class="btn" id="againBtn">New race</button>
         </div>
         <div id="revealBox" class="hidden">
@@ -399,10 +404,16 @@
         <h2>Verification report</h2>
         <div id="vChecks"></div>
         <div style="margin-top:14px">
-          <label>Recomputed standings</label>
+          <label>Recomputed standings <span id="vCount" style="text-transform:none"></span></label>
           <div class="scroller">
             <table class="st"><thead><tr><th>#</th><th>Name</th><th>Time</th><th>Skin</th></tr></thead><tbody id="vBody"></tbody></table>
           </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn" id="vCsvBtn" disabled>Download full standings (CSV)</button>
+          </div>
+          <p class="note">These are this page's own numbers, not the operator's: the table and the CSV
+            come from the race it just recomputed from the seed, so they are the full field whether or
+            not the operator published a standings list.</p>
         </div>
       </div>
       <div class="card" id="intCard">
@@ -2126,6 +2137,221 @@ function drawTurtle(c, sk, frame){
 /* --- sprite sheet: 100 skins x 4 frames, pre-rendered once --- */
 const SPR_W=110, SPR_H=72, FRAMES=6, DESIGN_W=100, DESIGN_H=64;
 let sheet=null, sheetAnimal=null;
+/* --- draw one bunny, facing right, in the same 100 x 64 design box ---
+   Cosmetic alternative to the pug. Same skin feature table, so skin #47 is
+   still skin #47 — only the artwork differs, never the race.
+
+   This is built on a rabbit's skeleton, not the pug's with ears added. What
+   reads at race scale is the silhouette, and a rabbit's is the opposite shape
+   to a pug's: the RUMP is the highest point of the animal, the back slopes
+   down from it, and the head is small and carried LOW and forward — where a
+   pug is a level barrel with a big round head held high. The other cues are
+   all placement rather than detail: the eye sits high and far back on the
+   skull (rabbits look sideways and upward, dogs look forward), the ears rise
+   from behind it, there is no neck to put a collar gap in, the forelegs are
+   short and tucked under the chest, and the hind leg folds into a Z with a
+   visible hock above a long foot lying flat on the ground.
+   The ear feature is reused as how far back the ears are tipped, so a
+   "floppy" pug and a "floppy" bunny are still the same skin.            */
+const BUN_HX=77, BUN_HY=34, BUN_HR=10.5;   // head: small, low, well forward
+const BUN_RX=30, BUN_RY=31, BUN_RR=15.5;   // rump: the tallest mass
+/* One ear, rising from behind the skull and sweeping up and back. */
+function bunnyEar(c, kind, far, lean, fill, inner){
+  const tilt = kind==="perky" ? -0.04 : kind==="rose" ? 0.46 : 0.22;
+  const side = far ? -1 : 1;
+  c.save();
+  c.translate(BUN_HX-7+side*2.5, BUN_HY-7);
+  c.rotate(tilt + lean + side*0.15);
+  c.fillStyle=fill;
+  c.beginPath(); c.ellipse(0,-14,4.6,15.5,0,0,7); c.fill();
+  if(inner){
+    c.fillStyle=inner;
+    c.beginPath(); c.ellipse(0.4,-14,2.2,11.5,0,0,7); c.fill();
+  }
+  c.restore();
+}
+/* Hind leg: thigh down and back to the hock, shin forward to the heel, then a
+   long flat foot. Folds up as the animal leaves the ground. */
+function bunnyHind(c, dx, lift, thigh, foot, sock){
+  const hx = BUN_RX-9+dx*0.3, hy = 45-lift*0.35;        // hock
+  const fx = BUN_RX+5+dx, fy = 53.5-lift;               // heel
+  c.strokeStyle=thigh; c.lineCap="round";
+  c.lineWidth=11; c.beginPath(); c.moveTo(BUN_RX, BUN_RY+6); c.lineTo(hx,hy); c.stroke();
+  c.lineWidth=7;  c.beginPath(); c.moveTo(hx,hy); c.lineTo(fx,fy); c.stroke();
+  c.fillStyle = sock || foot;
+  c.save(); c.translate(fx,fy); c.rotate(-lift*0.045);
+  c.beginPath(); c.ellipse(3.5,0,8.8,3.2,0,0,7); c.fill();
+  c.restore();
+}
+/* Foreleg: short, thin, tucked under the chest — nothing like a pug's. */
+function bunnyLeg(c, x, dx, lift, fill, sock){
+  c.strokeStyle=fill; c.lineWidth=5.4; c.lineCap="round";
+  c.beginPath(); c.moveTo(x, 42); c.lineTo(x+dx, 53-lift*0.5); c.stroke();
+  if(sock){ c.strokeStyle=sock;
+    c.beginPath(); c.moveTo(x+dx*0.7, 49.5-lift*0.35); c.lineTo(x+dx, 53-lift*0.5); c.stroke(); }
+}
+function drawBunny(c, sk, frame){
+  const coat=sk.coat, dark=shade(coat,-40), deep=shade(coat,-64), light=shade(coat,30);
+  const inner=shade("#e8a0ad", sk.mask ? -24 : 0);      // pink ear lining
+  const sock = sk.patch==="socks" ? shade(coat,66) : null;
+  // 6-frame bound: gather, launch, float, reach, land, settle.
+  const hop   = [0, -3.6, -6.6, -4.6, -1.0, 0][frame];
+  const hindX = [0,  3.4,  6.8,  4.0,  0.8, 0][frame];
+  const foreX = [0, -2.6, -4.6, -1.2,  2.4, 1][frame];
+  const lean  = [0,  0.12, 0.26, 0.16, 0.04, 0][frame];
+  const lift  = -hop;
+  c.save();
+  c.translate(0, hop);
+
+  // ---- far side limbs ----
+  bunnyHind(c, hindX, lift, deep, deep, sock);
+  bunnyLeg(c, 64, foreX, lift, deep, sock);
+
+  // ---- cotton tail: high on the rump, not hanging low ----
+  c.fillStyle=shade(coat,74);
+  c.beginPath(); c.arc(BUN_RX-14,BUN_RY-1,6,0,7); c.fill();
+  c.fillStyle="rgba(0,0,0,.10)";
+  c.beginPath(); c.arc(BUN_RX-12.5,BUN_RY+0.5,4.2,0,7); c.fill();
+
+  /* ---- the silhouette: rump high at the back, a back line sloping down to a
+          low shoulder, and a small head carried forward. One path, so it
+          reads as a single arched body rather than stuck-together circles. */
+  c.fillStyle=coat;
+  c.beginPath();
+  c.moveTo(BUN_RX-15, BUN_RY+4);                                   // behind the rump
+  c.bezierCurveTo(BUN_RX-16, BUN_RY-14, BUN_RX+8, BUN_RY-16, BUN_RX+16, BUN_RY-7);
+  c.bezierCurveTo(60, 21, 68, 24, 72, 29);                         // back down to the shoulder
+  c.bezierCurveTo(76, 34, 74, 42, 66, 44);                         // chest
+  c.bezierCurveTo(52, 48, 36, 48, BUN_RX-12, BUN_RY+12);           // belly
+  c.closePath(); c.fill();
+
+  // rump shading, to keep the high hip readable at small sizes
+  c.fillStyle="rgba(0,0,0,.10)";
+  c.beginPath(); c.arc(BUN_RX-1, BUN_RY+1, BUN_RR-2.5, Math.PI*0.9, Math.PI*2.05); c.fill();
+  if(sk.patch==="saddle"){ c.fillStyle=dark;
+    c.beginPath(); c.ellipse(BUN_RX+10,BUN_RY-6,13,5.5,-0.42,0,7); c.fill(); }
+  c.fillStyle="rgba(0,0,0,.12)";
+  c.beginPath(); c.ellipse(44,47,16,4.2,-0.04,0,7); c.fill();
+  if(sk.patch==="chest"){ c.fillStyle=light;
+    c.beginPath(); c.ellipse(69,38,6.2,6.8,0.2,0,7); c.fill(); }
+
+  // ---- near side limbs ----
+  bunnyHind(c, hindX, lift, coat, dark, sock);
+  bunnyLeg(c, 69, foreX, lift, coat, sock);
+
+  // ---- far ear ----
+  bunnyEar(c, sk.ear, true, lean, deep, null);
+
+  // ---- head: small, low, merging straight into the shoulder ----
+  c.fillStyle=coat;
+  c.beginPath(); c.arc(BUN_HX,BUN_HY,BUN_HR,0,7); c.fill();
+  // muzzle tapering to a point, not a round pug blob
+  c.beginPath();
+  c.moveTo(BUN_HX-1, BUN_HY-7.5);
+  c.bezierCurveTo(BUN_HX+9, BUN_HY-6, BUN_HX+13, BUN_HY-1.5, BUN_HX+12.5, BUN_HY+1.5);
+  c.bezierCurveTo(BUN_HX+11, BUN_HY+6.5, BUN_HX+3, BUN_HY+8.5, BUN_HX-2, BUN_HY+7.5);
+  c.closePath(); c.fill();
+  if(sk.mask){
+    c.save();
+    c.beginPath(); c.arc(BUN_HX,BUN_HY,BUN_HR,0,7);
+    c.ellipse(BUN_HX+6,BUN_HY,7.5,7,0,0,7); c.clip();
+    c.fillStyle=sk.mask;
+    c.beginPath(); c.ellipse(BUN_HX+6,BUN_HY+1,10,8,0,0,7); c.fill();
+    c.restore();
+  }
+  // nose: small triangle at the tip
+  c.fillStyle="#e0808f";
+  c.beginPath();
+  c.moveTo(BUN_HX+12.5, BUN_HY-0.6); c.lineTo(BUN_HX+9.4, BUN_HY-1.4);
+  c.lineTo(BUN_HX+10.6, BUN_HY+1.8); c.closePath(); c.fill();
+  // split lip
+  c.strokeStyle="rgba(0,0,0,.34)"; c.lineWidth=1.2; c.lineCap="round";
+  c.beginPath(); c.moveTo(BUN_HX+10.6, BUN_HY+1.9); c.lineTo(BUN_HX+10.2, BUN_HY+4.4); c.stroke();
+  c.beginPath(); c.moveTo(BUN_HX+10.2, BUN_HY+4.4);
+  c.quadraticCurveTo(BUN_HX+6.4, BUN_HY+5.6, BUN_HX+4.4, BUN_HY+4); c.stroke();
+  // whiskers, swept back from the muzzle
+  c.strokeStyle="rgba(255,255,255,.32)"; c.lineWidth=0.9;
+  for(let i=-1;i<=1;i++){
+    c.beginPath(); c.moveTo(BUN_HX+9.5, BUN_HY+0.6+i*0.6);
+    c.quadraticCurveTo(BUN_HX+16, BUN_HY+0.2+i*2.8, BUN_HX+20, BUN_HY-0.8+i*4.4); c.stroke();
+  }
+  c.fillStyle="#f6f4ec";                                   // a front tooth
+  c.fillRect(BUN_HX+9.6, BUN_HY+4.5, 1.6, 2.2);
+
+  // ---- near ear ----
+  bunnyEar(c, sk.ear, false, lean, dark, inner);
+
+  /* ---- eye: high and far back on the skull. This placement is doing as much
+          work as the ears — a forward, centred eye is what made the first
+          attempt read as a dog. */
+  const ex=BUN_HX-3.5, ey=BUN_HY-4.5;
+  if(sk.patch==="eye"){ c.fillStyle=deep; c.beginPath(); c.arc(ex,ey,7.4,0,7); c.fill(); }
+  if(sk.eye==="sleepy"){
+    c.strokeStyle="#141418"; c.lineWidth=2.4; c.lineCap="round";
+    c.beginPath(); c.arc(ex,ey,4.4,Math.PI*0.08,Math.PI*0.94); c.stroke();
+  } else {
+    const r = sk.eye==="derp"?5.2:4.4;
+    c.fillStyle="#f8f7f2"; c.beginPath(); c.ellipse(ex,ey,r,r*1.06,0.2,0,7); c.fill();
+    c.strokeStyle="rgba(0,0,0,.35)"; c.lineWidth=1; c.stroke();
+    const dx = sk.eye==="derp"?-2:0.9, dy = sk.eye==="derp"?-1.3:0.4;
+    c.fillStyle="#141418";
+    c.beginPath(); c.arc(ex+dx,ey+dy,r*0.5,0,7); c.fill();
+    c.fillStyle= sk.eye==="starry"?"#ffffff":"rgba(255,255,255,.9)";
+    c.beginPath(); c.arc(ex+dx+1.1,ey+dy-1.4, sk.eye==="starry"?1.5:1,0,7); c.fill();
+  }
+
+  /* ---- collar: a rabbit has no neck to show one on, so the skin's collar
+          colour becomes a ribbon round the chest instead of a dog collar
+          behind the jaw. Same feature, same colour, no canine cue. */
+  c.strokeStyle=sk.collar; c.lineWidth=4.2; c.lineCap="butt";
+  c.beginPath(); c.moveTo(63,28.5); c.quadraticCurveTo(72,36,65,44.5); c.stroke();
+  c.fillStyle="#e9d27a";
+  c.beginPath(); c.arc(70,36.5,2.1,0,7); c.fill();
+
+  // ---- accessory: hung off the head and chest, clear of the ears ----
+  c.lineCap="round";
+  switch(sk.acc){
+    case "goggles":
+      c.strokeStyle="#3a3f4a"; c.lineWidth=2.8;
+      c.beginPath(); c.arc(BUN_HX,BUN_HY,BUN_HR-1,Math.PI*1.00,Math.PI*1.72); c.stroke();
+      c.fillStyle="rgba(150,225,255,.72)"; c.strokeStyle="#262b33"; c.lineWidth=2;
+      c.beginPath(); c.arc(ex,ey,6,0,7); c.fill(); c.stroke();
+      break;
+    case "bandana":
+      c.fillStyle=shade(sk.collar,-18);
+      c.beginPath(); c.moveTo(64,29.5); c.lineTo(71,37.5); c.lineTo(63,41); c.closePath(); c.fill();
+      break;
+    case "cap":
+      c.fillStyle=shade(sk.collar,-26);
+      c.save(); c.translate(BUN_HX-1,BUN_HY-8); c.rotate(-0.22);
+      c.beginPath(); c.arc(0,0,7.2,Math.PI,0); c.fill();
+      c.fillRect(0,-0.9,10.5,2.2);
+      c.restore();
+      break;
+    case "bowtie":
+      c.fillStyle=shade(sk.collar,16);
+      c.beginPath(); c.moveTo(67,33); c.lineTo(62,29.6); c.lineTo(63,36.4); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(67,33); c.lineTo(72,30.6); c.lineTo(72,37); c.closePath(); c.fill();
+      c.fillStyle="rgba(0,0,0,.25)";
+      c.beginPath(); c.arc(67.2,33.2,1.6,0,7); c.fill();
+      break;
+    case "crown":
+      c.fillStyle="#e9c75a";
+      c.save(); c.translate(BUN_HX-2,BUN_HY-9); c.rotate(-0.2);
+      c.beginPath();
+      c.moveTo(-7,1); c.lineTo(-7,-5); c.lineTo(-3.5,-1.8);
+      c.lineTo(0,-6.6); c.lineTo(3.5,-1.8); c.lineTo(7,-5);
+      c.lineTo(7,1); c.closePath(); c.fill();
+      c.restore();
+      break;
+    case "headband":
+      c.strokeStyle=shade(sk.collar,10); c.lineWidth=2.4;
+      c.beginPath(); c.arc(BUN_HX,BUN_HY,BUN_HR-0.5,Math.PI*1.04,Math.PI*1.66); c.stroke();
+      break;
+  }
+  c.restore();
+}
+
 function animalNow(){ return state && state.animal ? state.animal : "pug"; }
 function drawRacer(c, sk, frame){
   const a=animalNow();
@@ -2133,6 +2359,7 @@ function drawRacer(c, sk, frame){
   else if(a==="duck") drawDuck(c, sk, frame);
   else if(a==="boomer") drawBoomer(c, sk, frame);
   else if(a==="turtle") drawTurtle(c, sk, frame);
+  else if(a==="bunny") drawBunny(c, sk, frame);
   else drawPug(c, sk, frame);
 }
 /* Some themes are shown SLOWER than others — a boomer shuffles, a turtle
@@ -2232,8 +2459,8 @@ function nameReport(text){
   const groups=lookalikeGroups(names);
   const mixed=Array.from(new Set(names.filter(mixedScript)));
   const counts=new Map(); for(const n of names) counts.set(n,(counts.get(n)||0)+1);
-  const repeats=Array.from(counts).filter(([,c])=>c>1).length;
-  return {cleaned, groups, mixed, repeats};
+  const dupes=Array.from(counts).filter(([,c])=>c>1).sort((a,b)=>b[1]-a[1]);
+  return {cleaned, groups, mixed, dupes, repeats:dupes.length};
 }
 const showName=n=>'“'+esc(n)+'”'+(/[^\x20-\x7E]/.test(n)?' <span class="warn" title="contains non-ASCII characters">ⓘ</span>':'');
 function renderNameWarn(){
@@ -2243,8 +2470,27 @@ function renderNameWarn(){
   if(r.mixed.length) out.push('<span class="warn">Names mixing Latin/Cyrillic/Greek letters:</span> '+
     r.mixed.slice(0,8).map(showName).join(", ")+(r.mixed.length>8?" …":""));
   if(r.cleaned) out.push('<span class="warn">'+r.cleaned+' name'+(r.cleaned===1?"":"s")+' contained invisible or formatting characters</span> — removed, so they race under the visible name.');
-  if(r.repeats) out.push(r.repeats+' name'+(r.repeats===1?" appears":"s appear")+' more than once — each copy races separately.');
+  /* Duplicates block the commitment. A roster read out as "Bean, Bean" is
+     almost always a paste that went in twice, and the race it seals is then
+     wrong in a way nobody can tell from the result — two entries called Bean
+     both run, and the winner's name is ambiguous on screen and in the
+     receipt. Blocked here rather than warned about, so it is caught before
+     the commitment seals it in. (The race itself handles repeats fine: they
+     are keyed Bean, Bean#1, Bean#2… and old receipts containing them still
+     verify.) */
+  if(r.dupes.length){
+    const total=r.dupes.reduce((a,[,c])=>a+c,0);
+    out.push('<span class="err">Duplicate names — remove or rename them (commit is blocked):</span> '+
+      r.dupes.slice(0,8).map(([n,c])=>showName(n)+' ×'+c).join(", ")+(r.dupes.length>8?" …":"")+
+      '<br><span class="note">'+total+' of the '+parseNames($("names").value).length+
+      ' entries are duplicates. If the same person really does have more than one entry, give each one its own '+
+      'name (for example “Bean (2nd ticket)”) so the result is unambiguous.</span>');
+  }
   $("nameWarn").innerHTML=out.join("<br>");
+  // Only offered when it would do something: an always-present button inviting
+  // the host to renumber a roster that is already fine is a way to get an
+  // accidental click just before committing.
+  $("dedupeRow").classList.toggle("hidden", !r.dupes.length);
   return r;
 }
 function updateCount(){
@@ -2284,6 +2530,36 @@ $("names").addEventListener("keydown", e=>{
   ta.dispatchEvent(new Event("input",{bubbles:true}));   // refresh the racer count
 });
 $("clearNames").onclick=()=>{ $("names").value=""; updateCount(); };
+/* Turn repeated names into numbered ones: John, John, John -> John 1, John 2,
+   John 3. Names that appear once are left exactly as they are.
+
+   A suffix that would collide with a name already in the list is skipped, so
+   [John, John, John 1] gives John 2, John 3 and leaves the existing John 1
+   alone, rather than manufacturing a fresh duplicate. The numbering uses a
+   space, not "#", because a trailing "#<digits>" is how repeated entries are
+   keyed internally and cleanName rewrites it ("Table #3" -> "Table # 3").
+   Entries are rewritten one per line, so a comma-pasted list comes back as
+   lines — predictable, and it matches what the roster actually sealed. */
+function dedupedNames(text){
+  const names=parseNames(text), counts=new Map();
+  for(const n of names) counts.set(n,(counts.get(n)||0)+1);
+  const taken=new Set(names), next=new Map();
+  return names.map(n=>{
+    if((counts.get(n)||0)<2) return n;
+    let i=next.get(n)||1, cand;
+    do { cand=n+" "+i; i++; } while(taken.has(cand));
+    next.set(n,i); taken.add(cand);
+    return cand;
+  });
+}
+$("dedupeNames").onclick=()=>{
+  const before=parseNames($("names").value).length;
+  $("names").value=dedupedNames($("names").value).join("\n");
+  updateCount();
+  const after=parseNames($("names").value).length;
+  // The count must not move: renaming is not adding or dropping entrants.
+  if(before!==after) console.warn("deduplicate changed the racer count", before, after);
+};
 $("demoNames").onclick=()=>{
   $("names").value=["Bartholomew","Winston","Nugget","Dumpling","Sir Barks-a-Lot","Meatball",
    "Peanut","Cinnamon","Waffles","Biscuit","Mochi","Pickles","Tater Tot","Gizmo","Bean",
@@ -2310,14 +2586,14 @@ function setLen(v){
   checkSeal();
 }
 document.querySelectorAll("#lenChips .chip").forEach(c=>c.onclick=()=>setLen(+c.dataset.len));
-function animalWord(){ return ({sloth:"sloth",duck:"duck",boomer:"boomer",turtle:"turtle"})[state.animal] || "pug"; }
+function animalWord(){ return ({sloth:"sloth",duck:"duck",boomer:"boomer",turtle:"turtle",bunny:"bunny"})[state.animal] || "pug"; }
 function setAnimal(a){
-  state.animal = (a==="sloth"||a==="duck"||a==="boomer"||a==="turtle") ? a : "pug";
+  state.animal = (a==="sloth"||a==="duck"||a==="boomer"||a==="turtle"||a==="bunny") ? a : "pug";
   document.querySelectorAll("#animalChips .chip")
     .forEach(c=>c.classList.toggle("on", c.dataset.animal===state.animal));
   const meta={pug:["\u{1F436}","PUG RACE"], sloth:["\u{1F9A5}","SLOTH RACE"],
               duck:["\u{1F986}","DUCK RACE"], boomer:["\u{1F9D3}","BOOMER RACE"],
-              turtle:["\u{1F422}","TURTLE RACE"]}[state.animal];
+              turtle:["\u{1F422}","TURTLE RACE"], bunny:["\u{1F430}","BUNNY RACE"]}[state.animal];
   $("hdrEmoji").textContent = meta[0];
   $("hdrTitle").textContent = meta[1];
   $("findPug").placeholder = "find a "+animalWord()+"\u2026";
@@ -2352,7 +2628,10 @@ $("genSecret").onclick=()=>{
   const msg=$("secretState");
   if(n<2 || n>10000){ msg.innerHTML='<span class="err">Step 1: enter between 2 and 10,000 racers before committing.</span>'; return; }
   if(!inp.entropySource){ msg.innerHTML='<span class="err">Say where the audience value will come from before committing.</span>'; return; }
-  if(renderNameWarn().groups.length){ msg.innerHTML='<span class="err">Step 1: some names look identical to others — see the warning under the name list.</span>'; return; }
+  const warn=renderNameWarn();
+  if(warn.groups.length){ msg.innerHTML='<span class="err">Step 1: some names look identical to others — see the warning under the name list.</span>'; return; }
+  if(warn.dupes.length){ msg.innerHTML='<span class="err">Step 1: '+warn.dupes.length+' name'+(warn.dupes.length===1?" is":"s are")+
+    ' entered more than once — see the warning under the name list. Remove the repeats, or give each entry its own name.</span>'; return; }
   state.secret = randomHex(32);
   state.commitment = commitmentFor(state.secret, inp.rosterHash, inp.lenSec, inp.entropySource);
   state.sealed = { commitment: state.commitment, namesText: $("names").value, rosterHash: inp.rosterHash,
@@ -2539,7 +2818,12 @@ function beginRace(practice){
       // Once the audience value is fixed the secret protects nothing, so it goes
       // out with the race: every viewer checks the race against its commitment
       // BEFORE watching it, instead of waiting on a reveal that may never come.
-      secret: state.secret, entropySource: state.entropySource
+      secret: state.secret, entropySource: state.entropySource,
+      // Cosmetic only, and deliberately NOT part of the commitment or the
+      // receipt: the host picked bunnies, so viewers should see bunnies
+      // rather than the pugs they got before this was sent. The seed, the
+      // simulation and verification are identical in every theme.
+      animal: state.animal
     }).then(r=>{
       if(r && r.ok && r.startAt){
         clockOffset = r.now - Date.now();      // trust the announcing clock
@@ -3155,7 +3439,8 @@ const BACKDROPS = {
   pug:    { top:"#1f3b26", bot:"#14231a" },   // grassy park
   sloth:  { top:"#12322b", bot:"#0b1f1b" },   // jungle floor
   boomer: { top:"#2b2937", bot:"#1a1922" },   // evening boardwalk
-  turtle: { top:"#39331f", bot:"#221c12" }    // sandy shore
+  turtle: { top:"#39331f", bot:"#221c12" },   // sandy shore
+  bunny:  { top:"#24401f", bot:"#162614" }    // sunlit meadow
 };
 const FLOWER_COLS=["#e8d05a","#e07a9a","#c98ae0","#e59a4a","#8ad0e0"];
 /* Walk the integer prop-slots visible on screen, world-anchored so props
@@ -3184,6 +3469,9 @@ function drawBackdrop(g, W, H, camX, ppu, t){
   else if(a==="sloth")  backdropJungle(g,W,H,camX,ppu,t,step);
   else if(a==="boomer") backdropBoardwalk(g,W,H,camX,ppu,t,step);
   else if(a==="turtle") backdropBeach(g,W,H,camX,ppu,t,step);
+  // Bunnies bound through the same grass the pugs do, so they share the park
+  // props rather than carrying a near-identical copy of them.
+  else if(a==="bunny")  backdropPark(g,W,H,camX,ppu,t,step);
 }
 
 /* ---- pug: grassy park — clouds, bushes, grass tufts, wildflowers ---- */
@@ -3585,6 +3873,13 @@ const HAZ_THEME = {
     butterfly:{label:"lost their train of thought"},
     nap:      {label:"took a little rest on the walker"}
   },
+  bunny: {
+    puddle:   {label:"splashed into a muddy rut"},
+    squirrel: {label:"froze to watch a passing fox"},
+    snack:    {label:"stopped for a mouthful of clover"},
+    butterfly:{label:"chased a butterfly off the path"},
+    nap:      {label:"flopped over for a quick doze"}
+  },
   turtle: {
     puddle:   {label:"tucked into its shell for a beat"},
     squirrel: {label:"stopped to watch a seagull"},
@@ -3694,8 +3989,12 @@ function endRace(){
   $("stCount").textContent = o.length>250 ? "(top 250 of "+o.length.toLocaleString()+" — CSV has all)" : "";
   $("revealBtn").classList.toggle("hidden", state.practice || WATCH);
   $("postBtn").classList.toggle("hidden", WATCH);   // needs the secret, which viewers don't have
-  $("csvBtn").classList.toggle("hidden", WATCH);
+  /* The CSV needs no secret — every page simulated the whole race itself — so
+     it is not operator-only. Without it (and the check-it button) the row was
+     empty for viewers, who are the people most likely to want both. */
+  $("csvBtn").classList.remove("hidden");
   $("againBtn").classList.toggle("hidden", WATCH);
+  $("resVerifyBtn").classList.toggle("primary", WATCH);
   $("resOverlay").classList.remove("hidden");
   startPodium();
 }
@@ -4087,12 +4386,20 @@ $("revealBtn").onclick=()=>{
 };
 $("copyReceipt").onclick=()=>copy($("receiptOut").value,$("copyReceipt"));
 $("dlReceipt").onclick=()=>download("pug-race-receipt.json",$("receiptOut").value,"application/json");
-$("csvBtn").onclick=()=>{
+function standingsCsv(order){
   let csv="place,name,time_seconds,pug_skin\n";
-  for(const r of state.order){
+  for(const r of order){
     csv += r.place+',"'+r.name.replace(/"/g,'""')+'",'+r.time.toFixed(4)+","+r.skin+"\n";
   }
-  download("pug-race-standings.csv",csv,"text/csv");
+  return csv;
+}
+$("csvBtn").onclick=()=>download("pug-race-standings.csv",standingsCsv(state.order),"text/csv");
+/* Straight to the Verify tab from the results screen. A real race has already
+   filled the receipt box on every viewer's page, so run the check too rather
+   than leaving them looking at a filled form with a button to find. */
+$("resVerifyBtn").onclick=()=>{
+  showView("verify");
+  if($("receiptIn").value.trim()) $("verifyBtn").onclick();
 };
 function download(fn,text,mime){
   const b=new Blob([text],{type:mime});
@@ -4369,8 +4676,9 @@ let verified=null;
 const HEX64=/^[0-9a-f]{64}$/;
 $("verifyBtn").onclick=()=>{
   const box=$("vChecks"); $("vResult").classList.remove("hidden");
-  verified=null; $("replayBtn").disabled=true;
-  const fail=msg=>{ box.innerHTML='<div class="err">'+esc(msg)+'</div>'; $("vBody").innerHTML=""; };
+  verified=null; $("replayBtn").disabled=true; $("vCsvBtn").disabled=true;
+  const fail=msg=>{ box.innerHTML='<div class="err">'+esc(msg)+'</div>'; $("vBody").innerHTML="";
+    $("vCount").textContent=""; $("vCsvBtn").disabled=true; };
   let R;
   try{ R=JSON.parse($("receiptIn").value); }
   catch(e){ return fail("Could not parse that as JSON."); }
@@ -4582,8 +4890,16 @@ $("verifyBtn").onclick=()=>{
       esc(c[0])+'<div class="hash" style="margin-top:4px">'+esc(String(c[2]))+'</div></div>').join("");
 
   fillTable($("vBody"), order, 250);
+  $("vCount").textContent = order.length>250
+    ? "(showing the top 250 of "+order.length.toLocaleString()+" — the CSV has every racer)" : "";
   verified={seed, canon, dist, lenSec:R.raceLengthSeconds, order, resH, R};
-  $("replayBtn").disabled=false;
+  $("replayBtn").disabled=false; $("vCsvBtn").disabled=false;
+};
+$("vCsvBtn").onclick=()=>{
+  if(!verified) return;
+  // Named after the commitment, so standings from different races don't collide.
+  download("pug-race-standings-"+String(verified.R.commitment||"").slice(0,12)+".csv",
+           standingsCsv(verified.order), "text/csv");
 };
 $("replayBtn").onclick=()=>{
   if(!verified) return;
@@ -4933,10 +5249,21 @@ function setLiveCheck(text, cls){
   const el=$("liveCheck"); el.textContent=text; el.className=cls; el.classList.toggle("hidden", !text);
 }
 let lobbySource=null;
+const THEMES = ["pug","sloth","duck","boomer","turtle","bunny"];
+/* The host's racer type is cosmetic, but it should still be what the audience
+   sees: before this, a host running a Bunny Race broadcast bunnies to nobody
+   and every viewer watched pugs. It never touches the seed, the commitment or
+   the receipt, so a race themed one way still verifies anywhere. An unknown
+   value (an older or newer build) is ignored rather than applied. */
+function followTheme(a){
+  if(!WATCH || !a || a===state.animal || THEMES.indexOf(a)<0) return;
+  setAnimal(a);
+}
 function onLiveState(st){
   if(st.type==="crowd"){ onCrowd(st.crowd); return; }
   if(st.type!=="state") return;
   const now=Date.now();
+  followTheme((st.race && st.race.animal) || (st.lobby && st.lobby.animal));
   if(firstSnapshot && Array.isArray(st.commitLog)){
     // Joined mid-session: take what the server reports was withdrawn since the
     // last race (its clock, its word) so late joiners still see the alert.
@@ -5066,7 +5393,8 @@ function initOperator(){
       entropySource: s ? s.entropySource : null,
       roster: s ? s.roster : null,           // the sealed names, for viewers to check before the audience speaks
       racerCount: s ? s.count : parseNames($("names").value).length,
-      lenSec: state.lenSec
+      lenSec: state.lenSec,
+      animal: state.animal          // cosmetic; see the note on /api/race
     });
   };
   $("genSecret").addEventListener("click",()=>setTimeout(announce,0));

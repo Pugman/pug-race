@@ -411,6 +411,10 @@ var server = http.createServer(function (req, res) {
                 body.roster.every(function (n) { return typeof n === "string"; }) ? body.roster : null,
         racerCount: body.racerCount || 0,
         lenSec: body.lenSec || 45,
+        // Cosmetic theme, passed through so every viewer sees the animal the
+        // host picked. It is not part of the commitment and never reaches the
+        // receipt, so it cannot change a result or a verification.
+        animal: typeof body.animal === "string" ? body.animal.slice(0, 16) : null,
         note: body.note || null
       };
       if (body.reset) { retireRace(now); race = null; receipt = null; }
@@ -483,6 +487,7 @@ var server = http.createServer(function (req, res) {
         secret: typeof body.secret === "string" ? body.secret : null,
         entropySource: typeof body.entropySource === "string" ? body.entropySource : null,
         practice: !!body.practice,
+        animal: typeof body.animal === "string" ? body.animal.slice(0, 16) : null,   // cosmetic; see /api/lobby
         commitPublishedAt: body.practice ? null : lobby.publishedAt,
         announcedAt: now,
         startAt: now + COUNTDOWN_MS   // server clock is the authority

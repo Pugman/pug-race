@@ -28,7 +28,15 @@ P("updateCount()"); P('$("genSecret").onclick()');
 ok("commit blocked on look-alikes", P("state.commitment")===null && /look identical/.test(el("secretState").innerHTML));
 ok("look-alike warning shown", /Look-alike/.test(el("nameWarn").innerHTML));
 el("names").value="Bean​\nWinston\nWinston"; P("updateCount()");
-ok("cleaning + repeat notes shown", /invisible/.test(el("nameWarn").innerHTML) && /more than once/.test(el("nameWarn").innerHTML));
+ok("cleaning + duplicate notes shown", /invisible/.test(el("nameWarn").innerHTML) && /Duplicate names/.test(el("nameWarn").innerHTML));
+// Duplicates block the commitment, the same way look-alikes do: a roster with
+// two entrants called Winston produces a winner nobody can identify, on screen
+// or in the receipt, and once it is sealed it cannot be corrected.
+el("secretState").innerHTML=""; P('$("genSecret").onclick()');
+ok("commit blocked on duplicate names", P("state.commitment")===null && /more than once/.test(el("secretState").innerHTML));
+el("names").value="Bean\nWinston\nNugget"; P("updateCount()");
+el("secretState").innerHTML=""; P('$("genSecret").onclick()');
+ok("a roster with no duplicates still seals", /^[0-9a-f]{64}$/.test(P("state.commitment")||""));
 // receipt pipeline
 el("names").value="Bean\nWinston\nNugget\nMochi"; P("updateCount()"); P('$("genSecret").onclick()');
 el("audience").value="walrus"; P('$("startRace").onclick()'); P('$("revealBtn").onclick()');
