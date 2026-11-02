@@ -5,7 +5,9 @@
 "use strict";
 const fs = require("fs"), crypto = require("crypto");
 const L = require("./lib");
-const { ok, done, wait, until, loadPage, M, httpReq, verifyJs, startServer, stopServer, closeStreams } = L;
+// These suites write ok(condition, label); lib.js takes ok(label, condition).
+const ok = (cond, label, extra) => L.ok(label, cond, extra);
+const { done, wait, until, loadPage, M, httpReq, verifyJs, startServer, stopServer, closeStreams } = L;
 const { sha256, canonRoster, rosterHash, commitmentFor, simulate, resultsHash, BASE_V, crowdSource, submissionHash, crowdAudience } = M;
 const PW = L.PASSWORD, rnd = n => crypto.randomBytes(n).toString("hex");
 const NAMES = ["Bartholomew","Winston","Nugget","Dumpling","Meatball","Peanut","Mochi","Bean","Waffles","Biscuit","Pickles","Gizmo"];
@@ -123,7 +125,7 @@ const state = () => httpReq("GET", "/api/state").then(r => r.j);
     const s2=rnd(32), C2=commitmentFor(s2,RH,LEN,"the first word shouted after I say go");
     await op("/api/lobby",{commitment:C2,rosterHash:RH,entropySource:"the first word shouted after I say go",roster:NAMES,racerCount:NAMES.length,lenSec:LEN,reset:true});
     ok((await op("/api/crowd/open")).status===409, "submissions can't open for a commitment sealed with another source");
-  } catch(e){ ok("suite ran to the end", false, e&&e.stack||e); }
+  } catch(e){ ok(false, "suite ran to the end", e&&e.stack||e); }
   closeStreams(); await stopServer(srv);
   done();
 })();

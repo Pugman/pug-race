@@ -4,7 +4,9 @@
 "use strict";
 const fs = require("fs"), crypto = require("crypto");
 const L = require("./lib");
-const { ok, done, wait, until, loadPage, M, httpReq, verifyJs, startServer, stopServer, closeStreams } = L;
+// These suites write ok(condition, label); lib.js takes ok(label, condition).
+const ok = (cond, label, extra) => L.ok(label, cond, extra);
+const { done, wait, until, loadPage, M, httpReq, verifyJs, startServer, stopServer, closeStreams } = L;
 const { sha256, canonRoster, rosterHash, commitmentFor, simulate, resultsHash, BASE_V, crowdSource, submissionHash, crowdAudience } = M;
 const PW = L.PASSWORD, rnd = n => crypto.randomBytes(n).toString("hex");
 const NAMES = ["Bartholomew","Winston","Nugget","Dumpling","Meatball","Peanut","Mochi","Bean","Waffles","Biscuit","Pickles","Gizmo"];
@@ -107,7 +109,7 @@ const state = () => httpReq("GET", "/api/state").then(r => r.j);
     await stopServer(srv,{keepState:true}); srv=await startServer();
     s=await state();
     ok(!s.lobby.commitment && !s.crowd && s.commitLog.length===0, "--fresh starts with an empty record");
-  } catch(e){ ok("suite ran to the end", false, e&&e.stack||e); }
+  } catch(e){ ok(false, "suite ran to the end", e&&e.stack||e); }
   closeStreams(); await stopServer(srv);
   done();
 })();
