@@ -59,6 +59,22 @@ const state = () => httpReq("GET", "/api/state").then(r => r.j);
     const pv=V[0].verify(s.receipt, C);
     ok(pv.v==="ok", "viewer 1's Verify tab: ✓ VERIFIED", pv.lines.filter(l=>l[0]!=="ok").map(l=>l[1]).join("; "));
 
+    console.log("Clearing the last race from viewers' screens");
+    const shown=(pg,id)=>!pg.el(id).classList.contains("hidden");
+    ok(shown(O,"clearCard") && !O.el("clearRaceBtn").disabled, "the setup page offers to clear the race viewers are looking at");
+    O.P("confirm=()=>false"); await O.el("clearRaceBtn").onclick(); await wait(300);
+    ok((await state()).race, "clearing a race that is still playing asks first, and backing out leaves it alone");
+    O.P("confirm=()=>true"); await O.el("clearRaceBtn").onclick(); await wait(500);
+    s=await state();
+    ok(!s.race && !s.receipt && !s.lobby.commitment, "confirming clears the race and its receipt, and the spent commitment isn't put back up");
+    ok(s.commitLog.find(e=>e.commitment===C).abandonedAt, "a race cleared before it could finish is logged as cut short");
+    ok(V.every(v=>shown(v,"lobbyOverlay") && !shown(v,"resOverlay") && !v.P("state.running")), "every viewer is back on the lobby screen");
+    ok(V[0].el("receiptIn").value && V[0].verify(undefined, C).v==="ok", "a viewer's Verify tab can still check the cleared race");
+    ok(O.el("clearRaceBtn").disabled && /lobby/.test(O.el("clearMsg").textContent), "the button greys out and says the viewers are back in the lobby");
+    O.fire("genSecret","click"); await wait(600);
+    const Cn=O.P("state.commitment");
+    ok(Cn && Cn!==C && V.every(v=>v.el("lobbyCommit").textContent===Cn), "a new commitment then shows on every viewer's lobby screen");
+
     console.log("Many submissions from one address");
     const s2=crypto.randomBytes(32).toString("hex"), C2=commitmentFor(s2,RH,LEN,SRC);
     await op("/api/lobby",{commitment:C2,rosterHash:RH,entropySource:SRC,roster:NAMES,racerCount:NAMES.length,lenSec:LEN,reset:true});

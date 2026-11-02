@@ -74,4 +74,19 @@ $("entropySrc").value=""; $("secretState").innerHTML=""; $("genSecret").onclick(
 ok("generate refuses without an entropy source", /audience value will come from/.test($("secretState").innerHTML));
 $("practice").onclick(); $("revealBtn").onclick();
 ok("practice receipt verifies", verify(JSON.parse($("receiptOut").value), JSON.parse($("receiptOut").value).commitment)==="ok");
+
+// ---- photo-finish slow-mo: a pure, invertible mapping every viewer computes alike ----
+const plan=run("playbackPlan"), wallOf=run("wallOf"), raceTimeAt=run("raceTimeAt");
+const close=plan([{time:30},{time:30.05}]), clear=plan([{time:30},{time:31}]);
+ok("close finish gets slow-mo, clear win doesn't", close.photo && !clear.photo && wallOf(clear,30)===30);
+let mono=true, inv=0;
+for(let t=0;t<40;t+=0.037){
+  const w=wallOf(close,t);
+  if(wallOf(close,t+0.037)<=w) mono=false;
+  inv=Math.max(inv, Math.abs(raceTimeAt(close,w)-t));
+}
+ok("slow-mo mapping is monotonic and inverts exactly", mono && inv<1e-9, "max error "+inv);
+ok("slow-mo is untouched before it and adds a few seconds overall",
+   Math.abs(wallOf(close,20)-20)<1e-6 && raceTimeAt(close,-2)===-2 && wallOf(close,40)-40>1.5 && wallOf(close,40)-40<5);
+ok("live racers carry their decided places", run("state.racers.every(r=>r.place>0) && state.racers.find(r=>r.place===1).key===state.order[0].key"));
 done();

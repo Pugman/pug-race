@@ -113,6 +113,7 @@
   .ev:first-child{animation:pop .3s ease-out}
   .ev b{color:var(--ink);font-weight:600}
   .ev.zoom b{color:var(--accent2)} .ev.haz b{color:var(--accent)} .ev.fin b{color:#ffd166}
+  .ev.lead{color:var(--ink)} .ev.lead b{color:#5ad1a0}
   @keyframes pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
   #mini{display:block;width:100%;height:70px;border-top:1px solid var(--line);background:var(--bg)}
   .overlay{
@@ -190,6 +191,14 @@
   <!-- ============================ SETUP ============================ -->
   <section class="view on" id="v-setup">
     <div class="wrap">
+      <div class="card hidden" id="clearCard" style="margin-bottom:16px">
+        <h2>Watch screens</h2>
+        <p class="help" id="clearHelp"></p>
+        <div class="row" style="align-items:center">
+          <button class="btn primary" id="clearRaceBtn">Clear last race from viewers' screens</button>
+          <span class="note" id="clearMsg" style="margin:0"></span>
+        </div>
+      </div>
       <div class="grid">
         <div>
           <div class="card">
@@ -233,6 +242,7 @@
               <button class="chip" data-animal="duck">🦆 Ducks</button>
               <button class="chip" data-animal="boomer">🧓 Boomers</button>
               <button class="chip" data-animal="turtle">🐢 Turtles</button>
+              <button class="chip" data-animal="bunny">🐰 Bunnies</button>
             </div>
           </div>
 
@@ -520,7 +530,9 @@
             gun. The result was already computed in full at the announcement; the animation is playback.</li>
           <li><b>Receipt.</b> The operator hits <b>Reveal</b>. <code>POST /api/receipt</code> is refused unless it
             matches the race viewers were shown. The server attaches its own timeline for the commitment as
-            <code>receipt.server</code>, and the receipt is pushed to every viewer.</li>
+            <code>receipt.server</code>, and the receipt is pushed to every viewer. Viewers don't have to wait for
+            it: their page already rebuilt the receipt from the checked announcement, and offers it, the standings
+            CSV and the results post as soon as the race ends.</li>
         </ol>
         <p class="note">Practice races skip the commitment, are marked “PRACTICE — not a real race, results don't count”
           on every screen, and fail verification if anyone tries to pass one off as real.</p>
@@ -808,10 +820,13 @@ resultsHash = SHA-256( lines of  place + "|" + key + "|" + time to 4 decimals , 
           <p class="help">None of these enter the seed, the simulation or the receipt, so a race verifies the same
             whichever is used.</p>
           <ul class="facts">
-            <li><b>Racer type</b>: pugs, sloths, ducks, boomers or turtles, each with its own backdrop and commentary.
+            <li><b>Racer type</b>: pugs, sloths, ducks, boomers, turtles or bunnies, each with its own backdrop and commentary.
               Slow themes look slow through camera distance and gait, not by changing the race.</li>
             <li><b>Views</b>: everyone, leaders or 1st place, with zoom, pan and “find a pug” for large fields.</li>
             <li><b>Sound</b>: synthesised live, driven by events that have already been decided.</li>
+            <li><b>Race drama</b>: lead-change and final-stretch calls, a crowd that swells as the finish gets close,
+              and slow motion on a photo finish. All of it reads the already-decided result; the slow-mo is worked out
+              from the finishing times, so every viewer slows down at the same moment.</li>
             <li><b>Podium, confetti and results post</b>: drawn after the result, seeded from the race seed rather than
               <code>Math.random()</code>.</li>
           </ul>
@@ -2123,6 +2138,161 @@ function drawTurtle(c, sk, frame){
   c.restore();
 }
 
+/* --- draw one Bunny --------------------------------------------------
+   Same 100 x 64 design box and the same 100-skin feature table as every
+   other racer type. Coat, mask, patch, eyes, collar and accessory come from
+   the shared skin; the ear style picks the ears — perky stands both up,
+   floppy is a lop, rose is one up and one down. Instead of a gallop the six
+   frames are one hop: crouch, push off, airborne, reach, land, gather. */
+function drawBunny(c, sk, frame){
+  const coat=sk.coat, dark=shade(coat,-36), deep=shade(coat,-60), light=shade(coat,30);
+  const cream=shade(coat,70), inner="#e9a3a8";
+  const hop =[0,-2,-5,-4,-1,0][frame];               // height of the body off the ground
+  const kick=[0,0.6,0.95,0.55,0.15,0][frame];        // hind feet swinging back on push-off
+  const reach=[0,1,4,6,2,0][frame];                  // front paws stretching out to land
+  const flap=[0,0.05,0.12,0.08,-0.06,0][frame];      // ears lagging behind the hop
+  const tilt=[0.04,-0.06,-0.1,0,0.08,0.06][frame];   // nose up on take-off, down on landing
+  const sock = sk.patch==="socks" ? cream : null;
+  const GY=54;
+  c.save();
+  c.translate(0,hop+2);                              // sit a little low so the ears clear the top mid-hop
+  c.translate(46,44); c.rotate(tilt); c.translate(-46,-44);
+
+  // ---- hind foot (one big flat foot, swinging back as it pushes off) ----
+  c.save(); c.translate(32,48); c.rotate(kick);
+  c.fillStyle=sock||dark;
+  c.beginPath(); c.ellipse(4,GY-50,10,3.2,0,0,7); c.fill();
+  c.restore();
+
+  // ---- cotton tail ----
+  c.fillStyle=cream;
+  c.beginPath(); c.arc(20,36,5.5,0,7); c.fill();
+
+  // ---- far front paw ----
+  c.strokeStyle=deep; c.lineWidth=4.5; c.lineCap="round";
+  c.beginPath(); c.moveTo(56,44); c.lineTo(58+reach*0.8, GY-1-reach*0.4); c.stroke();
+
+  // ---- body: round haunch at the back, narrower chest at the front ----
+  c.fillStyle=coat;
+  c.beginPath(); c.arc(34,40,14,0,7); c.fill();
+  c.beginPath(); c.ellipse(48,40,18,11,-0.08,0,7); c.fill();
+  c.beginPath(); c.ellipse(58,40,9,9,0,0,7); c.fill();
+  if(sk.patch==="saddle"){ c.fillStyle=dark; c.beginPath(); c.ellipse(40,31,14,5.5,-0.1,0,7); c.fill(); }
+  c.fillStyle="rgba(0,0,0,.12)";
+  c.beginPath(); c.ellipse(42,49,15,3.6,0,0,7); c.fill();
+  c.strokeStyle=dark; c.lineWidth=1.4;                // haunch line
+  c.beginPath(); c.arc(34,41,9,Math.PI*0.9,Math.PI*1.6); c.stroke();
+  if(sk.patch==="chest"){ c.fillStyle=cream; c.beginPath(); c.ellipse(60,44,6,6.5,0,0,7); c.fill(); }
+
+  // ---- near front paw ----
+  c.strokeStyle=coat; c.lineWidth=5; c.lineCap="round";
+  c.beginPath(); c.moveTo(60,44); c.lineTo(62+reach, GY-reach*0.5); c.stroke();
+  if(sock){ c.fillStyle=sock; c.beginPath(); c.arc(62+reach, GY-reach*0.5, 2.6,0,7); c.fill(); }
+
+  // ---- ears: drawn as long leaves from the top of the head ----
+  const ear=(x,y,ang,len,fill,up)=>{
+    c.save(); c.translate(x,y); c.rotate(ang);
+    c.fillStyle=fill;
+    c.beginPath(); c.ellipse(0,-len/2,4,len/2,0,0,7); c.fill();
+    if(up){                                          // a lop shows the back of the ear, not the pink
+      c.fillStyle=inner; c.globalAlpha=.75;
+      c.beginPath(); c.ellipse(0.4,-len/2,1.8,len/2-2.5,0,0,7); c.fill();
+      c.globalAlpha=1;
+    } else {
+      c.strokeStyle=dark; c.lineWidth=1;
+      c.beginPath(); c.ellipse(0,-len/2,4,len/2,0,0,7); c.stroke();
+    }
+    c.restore();
+  };
+  const upA=-0.32+flap, lopA=-2.5-flap*0.5;          // upright leans back; a lop hangs behind the cheek
+  const farUp = sk.ear==="perky";
+  ear(66,24, farUp?upA-0.18:lopA+0.2, farUp?19:15, sk.mask||deep, farUp);
+
+  // ---- head ----
+  c.fillStyle=coat;
+  c.beginPath(); c.arc(70,32,10.5,0,7); c.fill();
+  c.beginPath(); c.ellipse(78,35,6.5,5.5,0,0,7); c.fill();       // muzzle
+  if(sk.mask){                                  // dutch-style cheek marking (ears take it too)
+    c.save();
+    c.beginPath(); c.arc(70,32,10.5,0,7); c.clip();
+    c.fillStyle=sk.mask;
+    c.beginPath(); c.ellipse(67,35,7,6,0.2,0,7); c.fill();
+    c.restore();
+  }
+  c.fillStyle=light; c.globalAlpha=.45;
+  c.beginPath(); c.ellipse(67,26,5,2.6,-0.3,0,7); c.fill();
+  c.globalAlpha=1;
+
+  // ---- near ear: perky and rose stand up, floppy lops down ----
+  const nearUp = sk.ear!=="floppy";
+  ear(69,23, nearUp?upA:lopA, nearUp?19:16, sk.mask||coat, nearUp);
+
+  // ---- eye ----
+  const ex=74, ey=30;
+  if(sk.patch==="eye"){ c.fillStyle=deep; c.beginPath(); c.arc(ex,ey,4.6,0,7); c.fill(); }
+  if(sk.eye==="sleepy"){
+    c.strokeStyle="#20201c"; c.lineWidth=1.7; c.lineCap="round";
+    c.beginPath(); c.arc(ex,ey,2.6,Math.PI*0.05,Math.PI*0.95); c.stroke();
+  } else {
+    const r=sk.eye==="derp"?3.2:2.7;
+    c.fillStyle="#20201c"; c.beginPath(); c.arc(ex,ey,r,0,7); c.fill();
+    c.fillStyle="rgba(255,255,255,.9)";
+    c.beginPath(); c.arc(ex+(sk.eye==="derp"?-1:0.9), ey-1, r*0.36,0,7); c.fill();
+  }
+  if(sk.eye==="starry"){
+    c.strokeStyle="#20201c"; c.lineWidth=1;
+    c.beginPath(); c.moveTo(ex+2.4,ey-2.4); c.lineTo(ex+4.2,ey-3.8); c.stroke();
+  }
+
+  // ---- nose, mouth, whiskers ----
+  c.fillStyle="#e07a86";
+  c.beginPath(); c.moveTo(83,33); c.lineTo(85,34); c.lineTo(83.4,35.4); c.closePath(); c.fill();
+  c.strokeStyle=deep; c.lineWidth=0.9;
+  c.beginPath(); c.moveTo(83.4,35.4); c.quadraticCurveTo(82,38, 80,37.6); c.stroke();
+  c.strokeStyle="rgba(240,240,235,.55)"; c.lineWidth=0.7;
+  for(const dy of [-1.5,0.5,2.5]){
+    c.beginPath(); c.moveTo(81,35+dy*0.4); c.lineTo(90,34+dy); c.stroke();
+  }
+
+  // ---- collar at the neck ----
+  c.strokeStyle=sk.collar; c.lineWidth=2.8; c.lineCap="round";
+  c.beginPath(); c.moveTo(62,32); c.quadraticCurveTo(61,38, 64,42); c.stroke();
+
+  // ---- accessory ----
+  switch(sk.acc){
+    case "goggles":
+      c.strokeStyle="#3a3f4a"; c.lineWidth=2;
+      c.beginPath(); c.arc(70,32,11,Math.PI*1.1,Math.PI*1.95); c.stroke();
+      c.fillStyle="rgba(150,225,255,.7)"; c.strokeStyle="#262b33"; c.lineWidth=1.4;
+      c.beginPath(); c.arc(ex,ey,4,0,7); c.fill(); c.stroke();
+      break;
+    case "bandana":
+      c.fillStyle=sk.collar;
+      c.beginPath(); c.moveTo(60,36); c.lineTo(68,42); c.lineTo(58,45); c.closePath(); c.fill();
+      break;
+    case "cap":
+      c.fillStyle=sk.collar;
+      c.beginPath(); c.arc(71,30,10,Math.PI*1.12,Math.PI*1.95); c.fill();
+      c.beginPath(); c.ellipse(81,23.5,6,2,0.15,0,7); c.fill();
+      break;
+    case "bowtie":
+      c.fillStyle=sk.collar;
+      c.beginPath(); c.moveTo(63,40); c.lineTo(58,37); c.lineTo(58,43); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(63,40); c.lineTo(68,37); c.lineTo(68,43); c.closePath(); c.fill();
+      break;
+    case "crown":
+      c.fillStyle="#ffd166";
+      c.beginPath(); c.moveTo(70,23); c.lineTo(71.5,17); c.lineTo(75,21); c.lineTo(78,16);
+      c.lineTo(80,21); c.lineTo(82,18); c.lineTo(81,25); c.closePath(); c.fill();
+      break;
+    case "headband":
+      c.strokeStyle=sk.collar; c.lineWidth=2.4;
+      c.beginPath(); c.arc(70,32,11,Math.PI*1.15,Math.PI*1.85); c.stroke();
+      break;
+  }
+  c.restore();
+}
+
 /* --- sprite sheet: 100 skins x 4 frames, pre-rendered once --- */
 const SPR_W=110, SPR_H=72, FRAMES=6, DESIGN_W=100, DESIGN_H=64;
 let sheet=null, sheetAnimal=null;
@@ -2133,6 +2303,7 @@ function drawRacer(c, sk, frame){
   else if(a==="duck") drawDuck(c, sk, frame);
   else if(a==="boomer") drawBoomer(c, sk, frame);
   else if(a==="turtle") drawTurtle(c, sk, frame);
+  else if(a==="bunny") drawBunny(c, sk, frame);
   else drawPug(c, sk, frame);
 }
 /* Some themes are shown SLOWER than others — a boomer shuffles, a turtle
@@ -2310,14 +2481,15 @@ function setLen(v){
   checkSeal();
 }
 document.querySelectorAll("#lenChips .chip").forEach(c=>c.onclick=()=>setLen(+c.dataset.len));
-function animalWord(){ return ({sloth:"sloth",duck:"duck",boomer:"boomer",turtle:"turtle"})[state.animal] || "pug"; }
+function animalWord(){ return ({sloth:"sloth",duck:"duck",boomer:"boomer",turtle:"turtle",bunny:"bunny"})[state.animal] || "pug"; }
+function animalPlural(){ return state.animal==="bunny" ? "bunnies" : animalWord()+"s"; }
 function setAnimal(a){
-  state.animal = (a==="sloth"||a==="duck"||a==="boomer"||a==="turtle") ? a : "pug";
+  state.animal = (a==="sloth"||a==="duck"||a==="boomer"||a==="turtle"||a==="bunny") ? a : "pug";
   document.querySelectorAll("#animalChips .chip")
     .forEach(c=>c.classList.toggle("on", c.dataset.animal===state.animal));
   const meta={pug:["\u{1F436}","PUG RACE"], sloth:["\u{1F9A5}","SLOTH RACE"],
               duck:["\u{1F986}","DUCK RACE"], boomer:["\u{1F9D3}","BOOMER RACE"],
-              turtle:["\u{1F422}","TURTLE RACE"]}[state.animal];
+              turtle:["\u{1F422}","TURTLE RACE"], bunny:["\u{1F430}","BUNNY RACE"]}[state.animal];
   $("hdrEmoji").textContent = meta[0];
   $("hdrTitle").textContent = meta[1];
   $("findPug").placeholder = "find a "+animalWord()+"\u2026";
@@ -2657,6 +2829,11 @@ function beginPlayback(startAtMs){
   SFX.resume(); SFX.seedFrom(state.seed); SFX.startAmbient(state.animal);
   state.startAt = startAtMs;
   state.t = 0; state.acc = 0;
+  // Live racers are a fresh copy that never had places assigned; copy them from
+  // the decided order so finish-line commentary and the winner call can fire.
+  const placeOf=new Map(state.order.map(r=>[r.key,r.place]));
+  for(const r of state.racers) r.place=placeOf.get(r.key)||0;
+  resetDrama();
   state.running = true;
   $("cdOverlay").classList.remove("hidden");
   cancelAnimationFrame(state.raf);
@@ -2686,10 +2863,197 @@ function resetRenderState(){
   state.firstCamY=undefined;
 }
 
+/* ------------------------------------------------------------------ *
+ * Race drama — photo-finish slow-mo, lead changes, rising tension      *
+ *                                                                      *
+ * Presentation only. Everything here reads a race that is already      *
+ * decided; none of it feeds back into the simulation, the seed or the  *
+ * receipt.                                                             *
+ *                                                                      *
+ * The slow-mo is a fixed mapping from wall-clock time to race time,    *
+ * built from the finishing times alone. Every viewer has the same      *
+ * finishing times, so every screen slows down at the same instant and  *
+ * synced playback (and late joining) still works.                      *
+ *                                                                      *
+ * Big fields: the leading pack of 10,000 racers is a near-dead heat,   *
+ * so the lead and the top ranks churn constantly. Calls are debounced  *
+ * (a new leader must hold on), spaced out, and capped per race, with   *
+ * all three scaling up with field size.                                *
+ * ------------------------------------------------------------------ */
+const PHOTO_GAP = 0.25;    // 1st and 2nd closer than this (race seconds) = photo finish
+const SLOW_K    = 0.35;    // playback speed at the bottom of the slow-mo
+const SLOW_LEAD = 1.0;     // race seconds of slow-mo before the winner crosses...
+const SLOW_TAIL = 0.4;     // ...and after
+const SLOW_EASE = 0.5;     // race seconds to ease in and out of it
+const WARP_DT   = 0.02;
+
+function playbackPlan(order){
+  const plan={photo:false, gap:Infinity, a:0, b:0, wall:null};
+  if(!order || order.length<2) return plan;
+  plan.gap = order[1].time - order[0].time;
+  if(!(plan.gap < PHOTO_GAP)) return plan;
+  plan.photo=true;
+  plan.a=Math.max(0, order[0].time-SLOW_LEAD); plan.b=order[0].time+SLOW_TAIL;
+  // wall[i] = seconds after the gun at which race time i*WARP_DT is on screen
+  const n=Math.ceil((plan.b+SLOW_EASE)/WARP_DT)+2, w=new Float64Array(n);
+  for(let i=1;i<n;i++) w[i]=w[i-1]+WARP_DT/playSpeed(plan,(i-0.5)*WARP_DT);
+  plan.wall=w;
+  return plan;
+}
+function playSpeed(plan,t){
+  if(!plan.photo || t<plan.a-SLOW_EASE || t>plan.b+SLOW_EASE) return 1;
+  let u = t<plan.a ? (t-(plan.a-SLOW_EASE))/SLOW_EASE : t>plan.b ? 1-(t-plan.b)/SLOW_EASE : 1;
+  u=u*u*(3-2*u);
+  return 1-(1-SLOW_K)*u;
+}
+/* race time -> seconds after the gun */
+function wallOf(plan,t){
+  if(!plan || !plan.wall || t<=0) return t;
+  const w=plan.wall, last=w.length-1, lastT=last*WARP_DT;
+  if(t>=lastT) return w[last]+(t-lastT);
+  const i=Math.floor(t/WARP_DT), f=t/WARP_DT-i;
+  return w[i]+(w[i+1]-w[i])*f;
+}
+/* seconds after the gun -> race time */
+function raceTimeAt(plan,s){
+  if(!plan || !plan.wall || s<=0) return s;
+  const w=plan.wall, last=w.length-1;
+  if(s>=w[last]) return last*WARP_DT+(s-w[last]);
+  let lo=0, hi=last;
+  while(hi-lo>1){ const m=(lo+hi)>>1; if(w[m]<=s) lo=m; else hi=m; }
+  return (lo+(s-w[lo])/(w[hi]-w[lo]))*WARP_DT;
+}
+
+let drama=null;
+function resetDrama(){
+  const n=state.order ? state.order.length : 2, lg=Math.log10(Math.max(2,n));
+  drama={
+    plan: playbackPlan(state.order), banner:null,
+    // the bigger the field, the longer a leader must hold on and the rarer the calls
+    leadHold: 0.6+0.5*lg, leadGap: 2.5+1.2*lg, leadMax: n>1000?4:n>100?6:8,
+    leader:null, leaderSince:0, called:null, lastLead:-1e9, leadCalls:0,
+    snaps:[], lastSnap:-1e9, lastComeback:-1e9, comebacks:0, comebackMax: n>1000?2:4,
+    half:false, stretch:false, neck:false, photo:false, lastTension:-1e9
+  };
+}
+function ordinal(k){ const s=["th","st","nd","rd"], v=k%100; return k+(s[(v-20)%10]||s[v]||s[0]); }
+function feedLine(cls,txt){
+  if(feed.length && feed[0].t===txt) return;
+  feed.unshift({c:cls,t:txt}); if(feed.length>9) feed.length=9;
+  renderFeed();
+}
+/* One banner at a time across the top of the track; a new one replaces it. */
+function banner(text, sub, col, secs){
+  drama.banner={text, sub:sub||"", col:col||"#ffd166", born:performance.now(), life:(secs||2)*1000};
+}
+function drawBanner(g){
+  const b=drama && drama.banner; if(!b) return;
+  const age=performance.now()-b.born;
+  if(age>b.life){ drama.banner=null; return; }
+  const a=Math.min(1, age/160, (b.life-age)/400);
+  const fs=Math.max(18, Math.min(34, VW/26)), ss=Math.max(12, Math.round(fs*0.48));
+  g.save(); g.globalAlpha=a; g.textAlign="center"; g.textBaseline="middle";
+  g.font="800 "+fs+"px system-ui,sans-serif";
+  const tw=g.measureText(b.text).width;
+  g.font="600 "+ss+"px system-ui,sans-serif";
+  const w=Math.min(VW-24, Math.max(tw, b.sub?g.measureText(b.sub).width:0)+44);
+  const h=fs*1.5+(b.sub?ss*1.4:0), y=Math.max(44, VH*0.14), pop=1+0.08*Math.max(0,1-age/220);
+  g.translate(VW/2,y); g.scale(pop,pop);
+  g.fillStyle="rgba(14,17,22,.78)"; g.strokeStyle=b.col; g.lineWidth=2;
+  g.beginPath(); g.roundRect ? g.roundRect(-w/2,-h/2,w,h,10) : g.rect(-w/2,-h/2,w,h); g.fill(); g.stroke();
+  g.fillStyle=b.col; g.font="800 "+fs+"px system-ui,sans-serif";
+  g.fillText(b.text, 0, b.sub ? -ss*0.6 : 0, VW-40);
+  if(b.sub){ g.fillStyle="#e6ebf2"; g.font="600 "+ss+"px system-ui,sans-serif"; g.fillText(b.sub, 0, fs*0.55, VW-40); }
+  g.restore();
+}
+/* Slow-mo: darken the edges so it reads as a deliberate replay-style moment. */
+function drawSlowMo(g){
+  if(!drama || !drama.plan.photo) return;
+  const k=playSpeed(drama.plan, state.t); if(k>=0.999) return;
+  const u=(1-k)/(1-SLOW_K);
+  const gr=g.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*0.35,VW/2,VH/2,Math.max(VW,VH)*0.75);
+  gr.addColorStop(0,"rgba(0,0,0,0)"); gr.addColorStop(1,"rgba(0,0,0,"+(0.55*u).toFixed(3)+")");
+  g.fillStyle=gr; g.fillRect(0,0,VW,VH);
+}
+function winnerCall(r){
+  const p=drama.plan, second=state.order[1];
+  if(!second) banner("\u{1F3C6} "+r.name+" wins!", "", "#ffd166", 3);
+  else if(p.photo) banner("\u{1F3C6} "+r.name+" wins!", "by "+p.gap.toFixed(3)+"s over "+second.name+" — photo finish", "#ffd166", 3.2);
+  else banner("\u{1F3C6} "+r.name+" wins!", "by "+p.gap.toFixed(2)+"s", "#ffd166", 3);
+  if(p.photo) SFX.shutter();
+}
+/* Called once per rendered frame while the race plays (not while catching up). */
+function dramaTick(){
+  const t=state.t, n=state.racers.length, L=sortBuf[0];
+  if(!L || n<2) return;
+  const frac=L.pos/state.dist;
+
+  // ---- milestones ----
+  if(!drama.half && frac>=0.5){ drama.half=true; feedLine("lead","Halfway — <b>"+esc(L.name)+"</b> leads"); }
+  if(!drama.stretch && frac>=0.8){
+    drama.stretch=true;
+    feedLine("lead","Final stretch!");
+    if(!drama.plan.photo || t<drama.plan.a-SLOW_EASE) banner("FINAL STRETCH", "", "#5ad1a0", 1.6);
+  }
+  if(!drama.neck && drama.stretch && n>=3 && !L.done){
+    const c=sortBuf[2];
+    if(c && !c.done && L.pos-c.pos < 0.25*BASE_V){
+      drama.neck=true;
+      feedLine("lead","<b>"+esc(L.name)+"</b>, <b>"+esc(sortBuf[1].name)+"</b> and <b>"+esc(c.name)+"</b> are neck and neck!");
+    }
+  }
+  if(drama.plan.photo && !drama.photo && t>=drama.plan.a){
+    drama.photo=true;
+    banner("PHOTO FINISH!", "", "#f2a33c", wallOf(drama.plan,drama.plan.b)-wallOf(drama.plan,drama.plan.a)-0.4);
+  }
+
+  // ---- lead changes (debounced, spaced out, capped) ----
+  if(!L.done && t>START_RAMP+1.5){
+    if(L!==drama.leader){ drama.leader=L; drama.leaderSince=t; }
+    if(drama.called===null){ drama.called=L; feedLine("lead","<b>"+esc(L.name)+"</b> takes an early lead"); }
+    else if(L!==drama.called && t-drama.leaderSince>=drama.leadHold && t-drama.lastLead>=drama.leadGap &&
+            drama.leadCalls<drama.leadMax && !drama.photo){
+      drama.called=L; drama.lastLead=t; drama.leadCalls++;
+      feedLine("lead","<b>"+esc(L.name)+"</b> takes the lead!");
+      banner("NEW LEADER", L.name, "#5ad1a0", 1.8);
+      SFX.stinger();
+    }
+  }
+
+  // ---- comebacks: a racer now in the top 3 who was well back 3s ago ----
+  if(t-drama.lastSnap>=1){
+    drama.lastSnap=t;
+    const K=Math.min(n,60), m=new Map();
+    for(let i=0;i<K;i++) m.set(sortBuf[i], i+1);
+    drama.snaps.push({t, m}); if(drama.snaps.length>4) drama.snaps.shift();
+  }
+  const old=drama.snaps[0];
+  if(old && t-old.t>=2.5 && drama.comebacks<drama.comebackMax && t-drama.lastComeback>5 &&
+     t>START_RAMP+3 && t!==drama.lastLead){                  // don't talk over a lead change
+    for(let i=0;i<Math.min(3,n);i++){
+      const r=sortBuf[i], was=old.m.get(r);
+      if(r.done || r===drama.called) continue;              // the leader already got its call
+      if(was && was-(i+1)>=5){
+        drama.comebacks++; drama.lastComeback=t;
+        feedLine("zoom","<b>"+esc(r.name)+"</b> surges from "+ordinal(was)+" to "+ordinal(i+1)+"!");
+        break;
+      }
+    }
+  }
+
+  // ---- tension: the crowd swells as the leaders near the line, more so when it's tight ----
+  if(t-drama.lastTension>0.4){
+    drama.lastTension=t;
+    const b=sortBuf[1], gap=b ? (L.pos-b.pos)/BASE_V : 9;     // race seconds between 1st and 2nd
+    const close=Math.max(0, 1-gap/1.5);
+    SFX.tension(L.done ? 0 : frac*frac*(0.4+0.6*close));
+  }
+}
+
 function loop(){
   if(!state.running) return;
   const ov=$("cdOverlay");
-  let target=(syncedNow()-state.startAt)/1000;
+  let target=raceTimeAt(drama.plan, (syncedNow()-state.startAt)/1000);   // slow-mo near a photo finish
 
   if(target<0){                                   // synced countdown
     ov.classList.remove("hidden");
@@ -2729,7 +3093,7 @@ function loop(){
       pushEvents(ev);
       if(!catching) for(const e of ev){
         if(e.kind==="fin"){
-          if(e.r.place===1 && !state.winSfx){ state.winSfx=true; SFX.win(); }
+          if(e.r.place===1 && !state.winSfx){ state.winSfx=true; SFX.win(); winnerCall(e.r); }
           else SFX.finishBlip();
         } else if(e.kind==="zoom" && (rankOf.get(e.r)||99)<8){ SFX.flavour(); }
       }
@@ -2745,6 +3109,7 @@ function loop(){
     r.dx = r.done ? r.pos : r.prevPos + (r.pos-r.prevPos)*alpha;
   }
   draw();
+  if(!catching) dramaTick();
 
   let fin=0; for(const r of state.racers) if(r.done) fin++;
   $("clock").textContent=state.t.toFixed(2);
@@ -2976,6 +3341,8 @@ function draw(){
     }
   }
 
+  if(state.running){ drawSlowMo(g); drawBanner(g); }
+
   // ---- side panels ----
   if(state.t-lastBoard>0.12){ lastBoard=state.t; renderBoard(); }
   else if(state.t-lastMini>0.25){ lastMini=state.t; renderMini(); }
@@ -3155,7 +3522,8 @@ const BACKDROPS = {
   pug:    { top:"#1f3b26", bot:"#14231a" },   // grassy park
   sloth:  { top:"#12322b", bot:"#0b1f1b" },   // jungle floor
   boomer: { top:"#2b2937", bot:"#1a1922" },   // evening boardwalk
-  turtle: { top:"#39331f", bot:"#221c12" }    // sandy shore
+  turtle: { top:"#39331f", bot:"#221c12" },   // sandy shore
+  bunny:  { top:"#2c2a1c", bot:"#1a1810" }    // vegetable garden
 };
 const FLOWER_COLS=["#e8d05a","#e07a9a","#c98ae0","#e59a4a","#8ad0e0"];
 /* Walk the integer prop-slots visible on screen, world-anchored so props
@@ -3184,6 +3552,7 @@ function drawBackdrop(g, W, H, camX, ppu, t){
   else if(a==="sloth")  backdropJungle(g,W,H,camX,ppu,t,step);
   else if(a==="boomer") backdropBoardwalk(g,W,H,camX,ppu,t,step);
   else if(a==="turtle") backdropBeach(g,W,H,camX,ppu,t,step);
+  else if(a==="bunny")  backdropGarden(g,W,H,camX,ppu,t,step);
 }
 
 /* ---- pug: grassy park — clouds, bushes, grass tufts, wildflowers ---- */
@@ -3329,6 +3698,44 @@ function backdropBeach(g,W,H,camX,ppu,t,step){
       for(let p=0;p<10;p++){ const an=p*Math.PI/5-1.57, rr=(p&1)?1.6:3.7, px=x+Math.cos(an)*rr, py=y+Math.sin(an)*rr; p===0?g.moveTo(px,py):g.lineTo(px,py); }
       g.closePath(); g.fill();
     }
+  });
+}
+
+/* ---- bunny: vegetable garden — furrows, carrot tops, lettuces, dandelions ---- */
+function backdropGarden(g,W,H,camX,ppu,t,step){
+  g.strokeStyle="rgba(120,90,55,.12)"; g.lineWidth=3;   // tilled furrows running along the track
+  for(let i=1;i<Math.ceil(H/26)+1;i++){
+    const y=i*26-8;
+    g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke();
+  }
+  g.lineCap="round";
+  eachProp(camX, ppu, W, step/2, (k,x)=>{                // carrot tops poking out of the soil
+    const h=fnv(k*13+7);
+    if(h&1) return;
+    const y=(((h>>>4)%Math.ceil(H/26))+1)*26-9, sway=Math.sin(t*1.1+k)*1.5;
+    g.fillStyle="rgba(230,130,50,.30)";
+    g.beginPath(); g.ellipse(x,y+1,2.4,1.6,0,0,7); g.fill();
+    g.strokeStyle="rgba(110,170,80,.24)"; g.lineWidth=1.4;
+    for(const dx of [-2.5,0,2.5]){
+      g.beginPath(); g.moveTo(x,y); g.quadraticCurveTo(x+dx+sway,y-5, x+dx*1.6+sway,y-9); g.stroke();
+    }
+  });
+  eachProp(camX, ppu, W, step, (k,x)=>{                  // lettuce heads
+    if((fnv(k*23+1)&3)!==2) return;
+    const h=fnv(k*41+6), y=H*0.3+(h%1000)/1000*H*0.65, r=6+(h>>>9)%5;
+    g.fillStyle="rgba(120,180,90,.16)";
+    for(let p=0;p<5;p++){ const an=p*1.256+0.3; g.beginPath(); g.ellipse(x+Math.cos(an)*r*0.5,y+Math.sin(an)*r*0.35,r*0.6,r*0.4,an,0,7); g.fill(); }
+    g.fillStyle="rgba(170,215,120,.18)";
+    g.beginPath(); g.arc(x,y,r*0.4,0,7); g.fill();
+  });
+  eachProp(camX, ppu, W, step/2, (k,x)=>{                // dandelion clocks bobbing in the breeze
+    const h=fnv(k*53+2);
+    if(h&3) return;
+    const y=H*0.2+(h%1000)/1000*H*0.75, bob=Math.sin(t*1.4+k)*1.2;
+    g.strokeStyle="rgba(150,170,110,.2)"; g.lineWidth=1;
+    g.beginPath(); g.moveTo(x,y+8); g.lineTo(x+bob,y); g.stroke();
+    g.fillStyle="rgba(235,235,225,.16)";
+    g.beginPath(); g.arc(x+bob,y,3.4,0,7); g.fill();
   });
 }
 
@@ -3591,6 +3998,13 @@ const HAZ_THEME = {
     snack:    {label:"nibbled a strand of seaweed"},
     butterfly:{label:"got distracted by a butterfly"},
     nap:      {label:"took a long, slow blink"}
+  },
+  bunny: {
+    puddle:   {label:"ducked into a burrow for a beat"},
+    squirrel: {label:"froze, ears up, at a passing hawk"},
+    snack:    {label:"stopped to nibble a carrot"},
+    butterfly:{label:"chased a drifting dandelion seed"},
+    nap:      {label:"flopped over for a quick loaf"}
   }
 };
 function hazSkin(h){ const t=HAZ_THEME[animalNow()]; return (t&&t[h.id]) || null; }
@@ -3656,7 +4070,7 @@ function pushEvents(evts){
   if(zoomers.length===1){
     line("zoom","<b>"+esc(zoomers[0].name)+"</b> "+zoomLine(zoomers[0].i));
   } else if(zoomers.length>1){
-    line("zoom","<b>"+esc(zoomers[0].name)+"</b> leads "+zoomers.length+" "+animalWord()+"s on the charge!");
+    line("zoom","<b>"+esc(zoomers[0].name)+"</b> leads "+zoomers.length+" "+animalPlural()+" on the charge!");
   }
   for(const r of fins) line("fin","<b>"+esc(r.name)+"</b> crosses the line");
   if(feed.length>9) feed.length=9;
@@ -3693,8 +4107,12 @@ function endRace(){
   fillTable($("stBody"), o, 250);
   $("stCount").textContent = o.length>250 ? "(top 250 of "+o.length.toLocaleString()+" — CSV has all)" : "";
   $("revealBtn").classList.toggle("hidden", state.practice || WATCH);
-  $("postBtn").classList.toggle("hidden", WATCH);   // needs the secret, which viewers don't have
-  $("csvBtn").classList.toggle("hidden", WATCH);
+  // Viewers get the receipt straight away: the race arrived with its secret and
+  // their page checked it before playing, so there is nothing left to reveal.
+  if(WATCH && state.watchReceipt && !state.practice){
+    $("receiptOut").value=JSON.stringify(state.watchReceipt,null,1);
+    $("revealBox").classList.remove("hidden");
+  }
   $("againBtn").classList.toggle("hidden", WATCH);
   $("resOverlay").classList.remove("hidden");
   startPodium();
@@ -3831,6 +4249,24 @@ const SFX = {
   splash(at){ this.noise({f:2600, q:0.7, dur:0.22, gain:0.10, at:at||0}); },
   whoosh(at){ this.noise({f:700, q:0.8, dur:0.28, gain:0.07, at:at||0}); },
   blip(at){ this.tone({type:"triangle", f0:880, dur:0.07, gain:0.09, at:at||0}); },
+  stinger(){                          // lead change: a quick rising two-note
+    if(!this.allow(2)) return;
+    this.tone({type:"triangle", f0:660, dur:0.1, gain:0.14});
+    this.tone({type:"triangle", f0:990, dur:0.18, gain:0.16, at:0.09});
+  },
+  shutter(){                          // photo finish: a camera click
+    this.noise({f:3800, q:0.8, dur:0.04, gain:0.2});
+    this.noise({f:2400, q:0.8, dur:0.05, gain:0.14, at:0.07});
+  },
+  /* x in [0,1]: how tense the race is right now. Swells the ambient bed. */
+  tension(x){
+    if(!this.ctx || !this.started) return;
+    this.ambGain.gain.setTargetAtTime(0.35+0.45*Math.max(0,Math.min(1,x)), this.ctx.currentTime, 0.5);
+  },
+  thump(at){                          // a bunny stamping its hind foot
+    this.tone({type:"sine", f0:110, f1:48, dur:0.12, gain:0.2, atk:0.004, at:at||0});
+    this.noise({f:300, q:0.9, dur:0.06, gain:0.08, at:at||0});
+  },
 
   countdown(n){                       // 3,2,1 then GO
     if(n>0) this.tone({type:"triangle", f0:520, dur:0.16, gain:0.2});
@@ -3886,6 +4322,7 @@ const SFX = {
     if(this.theme==="duck"){ if(r<0.75) this.quack(0, 0.85+this.rnd()*0.4); else this.splash(); }
     else if(this.theme==="sloth"){ if(r<0.6) this.yawn(); else this.blip(); }
     else if(this.theme==="turtle"){ if(r<0.5) this.blip(); else this.splash(); }
+    else if(this.theme==="bunny"){ if(r<0.6) this.thump(); else this.blip(); }
     else { if(r<0.8) this.bark(); else this.blip(); }
   }
 };
@@ -4060,6 +4497,9 @@ function startPodium(){
 }
 function stopPodium(){ if(podiumRaf) cancelAnimationFrame(podiumRaf); podiumRaf=0; }
 
+/* The receipt for the race on screen: the operator's own, or on a viewer's
+   page the one it rebuilt from the race announcement it checked. */
+function raceReceipt(){ return WATCH && state.watchReceipt ? state.watchReceipt : buildReceipt(); }
 function buildReceipt(){
   return {
     format:"pug-race/2",
@@ -4327,7 +4767,7 @@ async function canvasToPngBlob(cv){
 async function generateResultsPost(){
   const order=state.order;
   if(!order||!order.length) return null;
-  const L=postLayout(order, buildReceipt());
+  const L=postLayout(order, raceReceipt());
   // The layout keeps both dimensions under ~15-16k px so any viewer can open it.
   // Probe anyway in case a machine's backing store is smaller, and shrink to fit.
   let scale=Math.min(1, 16000/L.W, 16000/L.H), cv, g;
@@ -4916,7 +5356,8 @@ function preflight(R, canon){
 }
 function receiptFromRace(R, canon, order){
   return { format:"pug-race/2", commitment:R.commitment, secret:R.secret, entropySource:R.entropySource,
-    audienceSeed:R.audienceSeed, finalSeed:R.seed, raceLengthSeconds:R.lenSec, rosterHash:rosterHash(canon),
+    audienceSeed:R.audienceSeed, finalSeed:R.seed, raceLengthSeconds:R.lenSec, buildFingerprint:codeFingerprint(),
+    rosterHash:rosterHash(canon),
     roster:canon.map(r=>r.name), resultsHash:resultsHash(order),
     top10:order.slice(0,10).map(r=>({place:r.place,name:r.name,time:+r.time.toFixed(4),skin:r.skin})),
     ...(R.crowd ? { crowd:R.crowd } : {}) };
@@ -4975,7 +5416,7 @@ function onLiveState(st){
       winner:order[0].name, announcedAt:now, firstSeen:seenCommits.get(R.commitment)||null,
       joinedLate:firstSnapshot, withdrawn:pendingWithdrawn.slice(),
       refused:problems.length>0, problems, abandonedBefore:abandonedSeen.slice(),
-      decidedAt:R.startAt + order[0].time*1000,
+      decidedAt:R.startAt + wallOf(playbackPlan(order), order[0].time)*1000,   // includes any slow-mo
       crowdMine: crowdMine.get(R.commitment) || null, crowdFrozen: crowdFrozen.get(R.commitment) || null
     };
     watchedRaces.set(R.commitment, rec);
@@ -5005,6 +5446,7 @@ function onLiveState(st){
     }
   }
   if(!st.race && currentWatch) closeCurrentWatch(now);
+  if(!st.race && WATCH && lastRaceId!==null){ lastRaceId=null; backToLobby(); }
   if(st.receipt){                               // let viewers verify on their own device
     liveReceiptText=JSON.stringify(st.receipt,null,1);
     $("receiptIn").value=liveReceiptText;
@@ -5014,6 +5456,16 @@ function onLiveState(st){
     $("lobbyStatus").textContent="Waiting for the operator to start…";
   }
   firstSnapshot=false;
+}
+/* The operator cleared the last race: stop it and show the lobby again. The
+   Verify tab keeps that race's receipt, so it can still be checked. */
+function backToLobby(){
+  state.running=false; cancelAnimationFrame(state.raf);
+  SFX.stopAmbient(); stopPodium();
+  for(const id of ["resOverlay","revealBox","cdOverlay"]) $(id).classList.add("hidden");
+  setLiveCheck("", "");
+  renderLobbyAlert();
+  $("lobbyOverlay").classList.remove("hidden");
 }
 function runAnnouncedRace(R, order){
   const canon=canonRoster(R.roster.map(String));
@@ -5028,6 +5480,7 @@ function runAnnouncedRace(R, order){
   state.dist       = R.lenSec*BASE_V;
   state.order      = order || simulate(state.seed, canon, state.dist);
   state.resHash    = resultsHash(state.order);
+  state.watchReceipt = receiptFromRace(R, canon, state.order);
   state.racers     = buildRacers(state.seed, canon);
   state.zones      = buildZones(state.seed, state.dist);
   resetRenderState();
@@ -5054,13 +5507,17 @@ function initOperator(){
   syncClock().then(()=>liveConnect(st=>{
     const c = st.type==="crowd" ? st.crowd : st.type==="state" ? st.crowd : undefined;
     if(c!==undefined){ state.crowdNow=c; renderOpCrowd(); }
+    if(st.type==="state"){ opRace=st.race||null; renderClearCard(); }
   }));
   if(!offline){ $("crowdMode").disabled=false; $("crowdModeWrap").title=""; }
   // Viewers see exactly what is sealed: the commitment plus the roster hash,
   // length and entropy source it covers (null while nothing is sealed).
-  const announce=announceLobby=()=>{
+  // reset===true also takes the last race off every viewer's screen. (It is
+  // also an event listener, so it must be exactly true, not just truthy.)
+  const announce=announceLobby=reset=>{
     const s=state.sealed;
     return postOp("/api/lobby",{
+      reset: reset===true,
       commitment: s ? s.commitment : null,
       rosterHash: s ? s.rosterHash : null,
       entropySource: s ? s.entropySource : null,
@@ -5074,7 +5531,36 @@ function initOperator(){
   $("raceLen").addEventListener("change",announce);
   document.querySelectorAll("#lenChips .chip").forEach(c=>c.addEventListener("click",announce));
   setTimeout(announce,300);
+  if(!offline) $("clearCard").classList.remove("hidden");
+  renderClearCard();
 }
+
+/* ---- clearing the last race from viewers' screens ----
+   Viewers keep the last race's results up until it is cleared. Clearing it
+   sends them back to the lobby, where they see the next commitment. A real
+   race cleared before it could have finished is logged as cut short, and
+   viewers are told about it at the next race (see retireRace in server.js). */
+let opRace=null;
+function renderClearCard(){
+  const btn=$("clearRaceBtn"); if(!btn) return;
+  btn.disabled=!opRace;
+  $("clearHelp").textContent = opRace
+    ? "Viewers are still looking at the last "+(opRace.practice?"practice ":"")+"race. Before you host another, clear it "+
+      "to send everyone back to the lobby, where they'll see your new commitment."
+    : "Viewers are on the lobby screen, ready for your next race.";
+}
+$("clearRaceBtn").onclick=async ()=>{
+  const r=opRace; if(!r || !announceLobby) return;
+  if(!r.practice && syncedNow() < r.startAt + r.lenSec*1000 &&
+     !confirm("That race is still playing on viewers' screens. Clearing it now records it as cut short, "+
+              "and every viewer is told about it when the next race starts. Clear it anyway?")) return;
+  const btn=$("clearRaceBtn"), msg=$("clearMsg");
+  btn.disabled=true; msg.textContent="Clearing…";
+  const res=await announceLobby(true);
+  msg.textContent = res && res.ok ? "Cleared — viewers are back in the lobby." : "Couldn't reach the race server — try again.";
+  if(!(res && res.ok)) btn.disabled=false;
+  setTimeout(()=>{ if(msg.textContent.startsWith("Cleared")) msg.textContent=""; }, 6000);
+};
 
 /* ---- host sign-in gate ---- */
 const offline = location.protocol==="file:";

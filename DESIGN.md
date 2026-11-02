@@ -279,6 +279,25 @@ long leaderboard table (rank, skin, name, time), and at the bottom the full
 reveal (the secret, the commitment, the final seed and the receipt JSON). It is
 a shareable, self-contained proof of the whole race and its fairness.
 
+**Viewers get the same downloads.** When a race ends, everyone on the watch
+link gets the results post, the full-standings CSV and (for a real race) the
+receipt, without waiting for the operator. Nothing new has to be revealed for
+this: every real race is announced with its secret, the viewer's page checks it
+against the published commitment before playing a frame, and the receipt it
+offers is the one it rebuilt from that checked announcement. It passes
+`verify.js` exactly like the operator's. Practice races give viewers the CSV and
+post but no receipt, as for the operator.
+
+**Clearing the last race.** Viewers keep the last race's results up until the
+host presses **Clear last race from viewers' screens** on the setup page. That
+sends `reset: true` with the lobby update. The server retires the race and drops
+its receipt, and every viewer's page goes back to the lobby screen showing
+whatever the host has sealed now. A spent commitment is never put back up. The
+Verify tab keeps the cleared race's receipt, so it can still be checked. Clearing
+a real race before it could have finished goes through the server's existing
+cut-short rule: it is logged, every viewer is told at the next race, and the
+host page asks for confirmation first.
+
 A **single** readable column is used while it stays within the height image
 viewers will open (~15,000 px, a few hundred racers). Past that, a single column
 would be tens of thousands of px tall — a valid PNG, but taller than most viewers
@@ -435,10 +454,10 @@ Three things make the Leaders view legible at scale:
 
 ### Racer types
 
-The setup page has a **Racer type** switch: pugs, sloths, ducks, boomers or
-turtles. It is **purely cosmetic**. They all share the same 100-skin feature
-table, so skin #47 is the same skin whichever you pick, and the racer type never
-enters the seed, the simulation or the receipt.
+The setup page has a **Racer type** switch: pugs, sloths, ducks, boomers,
+turtles or bunnies. It is **purely cosmetic**. They all share the same 100-skin
+feature table, so skin #47 is the same skin whichever you pick, and the racer
+type never enters the seed, the simulation or the receipt.
 
 - **Boomers** are elderly racers shuffling behind walking frames. Appearance is
   spread across six groups keyed off the skin index, with East/South-East Asian
@@ -446,22 +465,27 @@ enters the seed, the simulation or the receipt.
   at 16% each, Hispanic/Latino 10% and Middle Eastern 8%; hair colour varies
   within every group.
 - **Turtles** plod — the slowest theme, meant to feel like real turtles racing.
+- **Bunnies** hop: their six animation frames are one crouch–push–fly–land cycle
+  rather than a gallop, and the skin's ear style picks perky, lop or
+  one-of-each ears.
 
 **Each theme has its own backdrop**, drawn behind the racers and scrolling with
 the camera, each with its own scenery: the **river** has lily pads and cattails;
 the **grassy park** has drifting clouds, bushes and wildflowers; the **jungle**
 has hanging vines, broad leaves and twinkling fireflies; the **evening boardwalk**
 has a railing, glowing lamp posts and benches; the **sandy shore** has a shimmering
-waterline, seaweed, shells and starfish. The decorations are world-anchored so
-they drift past as the racers advance, deterministic (seeded by position, no
-`Math.random`), and kept subtle so the names stay readable.
+waterline, seaweed, shells and starfish; the **vegetable garden** has tilled
+furrows, carrot tops, lettuces and dandelion clocks. The decorations are
+world-anchored so they drift past as the racers advance, deterministic (seeded
+by position, no `Math.random`), and kept subtle so the names stay readable.
 
 **Theme-appropriate commentary.** The live feed and the obstacle each racer hits
 are reworded per theme — a boomer "stopped for a butterscotch candy", a sloth
 "dozed off mid-climb", a turtle "tucked into its shell for a beat", a duck "dived
-for a tasty snail". Only the wording and icons change; the hazard count, slow-down
-factor and duration that feed the simulation are identical in every theme, so a
-receipt still verifies the same in all of them.
+for a tasty snail", a bunny "stopped to nibble a carrot". Only the wording and
+icons change; the hazard count, slow-down factor and duration that feed the
+simulation are identical in every theme, so a receipt still verifies the same in
+all of them.
 
 **How slow themes are made to look slow.** The race itself is identical in every
 theme — that is the guarantee that lets a receipt verify anywhere — so slowness
@@ -476,6 +500,38 @@ the simulation, seed or receipt changes.
 Verified: a receipt produced in **turtle** (or boomer) mode verifies identically
 in every other theme — same checks, same standings, byte-identical output — and
 the receipt JSON contains no racer-type field at all.
+
+### Race drama
+
+A few touches make the race more exciting to watch. All of them are
+presentation only: they read a race that is already decided and never feed
+back into the seed, the simulation or the receipt.
+
+- **Photo-finish slow motion.** When 1st and 2nd finish less than 0.25 race
+  seconds apart, playback eases down to 0.35x for the last second before the
+  winner crosses (and a moment after), with a "PHOTO FINISH!" banner, a
+  darkened vignette and a camera-click as the winner crosses. Synced playback
+  maps wall-clock time to race time, so the slow-mo is a fixed, monotonic
+  remapping built only from the finishing times. Every viewer has the same
+  finishing times, so every screen slows down at the same instant, and a late
+  joiner lands on the same frame. It adds about 3 seconds to a close race.
+- **Winner call.** A banner names the winner and the margin, e.g. "by 0.023s
+  over Winston".
+- **Lead changes and comebacks.** A "NEW LEADER" banner, a short stinger and
+  a commentary line when the lead changes hands; a commentary line when a
+  racer jumps 5+ places into the top 3.
+- **Milestones and tension.** "Halfway", "Final stretch" and "neck and neck"
+  calls, and an ambient bed that swells as the leaders near the line, more so
+  when 1st and 2nd are close.
+
+**Big fields.** With thousands of racers the leading pack is a near-dead heat,
+so the lead and top ranks churn constantly. A new leader must hold on before
+being called (0.6s plus 0.5s per factor of ten racers), calls are spaced
+further apart as the field grows, and each race has a cap: at most 4 lead-change
+banners and 2 comeback lines above 1,000 racers (8 and 4 for small fields).
+Simulated end to end, a 10,000-racer race gets two lead-change banners, a
+couple of comeback lines and one neck-and-neck call, and the extra per-frame
+work costs about 1% of frame time.
 
 ### Sound
 

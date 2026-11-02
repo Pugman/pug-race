@@ -73,6 +73,16 @@ const vjs = (rec, saw) => verifyJs(rec, saw).code;
     v.advance(60000); v.feed(st({ lobby: lobbyOf(m), race: raceOf(m, "ok1") }));
     ok("valid announcement plays with “checked before the start”", v.el("liveCheck").textContent === "✓ checked before the start" && v.el("lobbyOverlay").classList.contains("hidden"));
     const vv = v.verify(); ok("viewer can verify immediately without any reveal", vv.v === "ok", vv.why);
+    v.P('$("skipBtn").onclick()');
+    const shown = id => !v.el(id).classList.contains("hidden");
+    ok("viewer gets CSV, results post and the receipt when the race ends", shown("csvBtn") && shown("postBtn") && shown("revealBox") && !shown("revealBtn"));
+    let vr = null; try { vr = JSON.parse(v.el("receiptOut").value); } catch (e) {}
+    ok("the viewer's receipt passes verify.js", vr && vr.secret === m.secret && vjs(vr, m.c) === 0);
+    ok("the viewer's results post uses that receipt", v.P("raceReceipt()").secret === m.secret && v.P("raceReceipt()").resultsHash === vr.resultsHash);
+    v.feed(st({ lobby: lobbyOf(m), race: null }));
+    ok("a cleared race takes the viewer back to the lobby", shown("lobbyOverlay") && !shown("resOverlay") && !shown("revealBox") && !v.P("state.running"));
+    v.feed(st({ lobby: lobbyOf(m), race: raceOf(m, "ok2") }));
+    ok("…and the next race plays from there", !shown("lobbyOverlay") && v.P("state.running"));
   }
   for (const [label, o] of [["a wrong secret", { secret: rnd() }], ["a seed not derived from the secret", { seed: rnd() }],
                             ["no secret", { secret: undefined }], ["an uncleaned audience value", { audienceSeed: "Walrus!" }]]) {
@@ -86,6 +96,8 @@ const vjs = (rec, saw) => verifyJs(rec, saw).code;
     const v = loadPage("/watch"), m = mk(NAMES2, "walrus"); v.feed(st({ lobby: lobbyOf(m) }));
     v.feed(st({ lobby: lobbyOf(m), race: raceOf(m, "pr", { practice: true, secret: undefined }) }));
     ok("practice races carry a PRACTICE banner", /^PRACTICE/.test(v.el("liveCheck").textContent));
+    v.P('$("skipBtn").onclick()');
+    ok("practice races give viewers the CSV but no receipt", !v.el("csvBtn").classList.contains("hidden") && v.el("revealBox").classList.contains("hidden"));
   }
   // ---- 4. cut-short races (viewer's own record) ----
   {

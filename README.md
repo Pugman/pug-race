@@ -1,10 +1,10 @@
 # Provably Fair Pug Race
 
 A browser game where 2–10,000 named racers (pugs, sloths, rubber ducks,
-boomers with walking frames, or plodding turtles) run a race whose outcome is
-decided by a committed random seed, so it can be **proven fair to an audience
-afterwards**. Each theme has its own backdrop — a river, a grassy park, a
-jungle, a boardwalk, a sandy shore.
+boomers with walking frames, plodding turtles, or hopping bunnies) run a race
+whose outcome is decided by a committed random seed, so it can be **proven fair
+to an audience afterwards**. Each theme has its own backdrop — a river, a grassy
+park, a jungle, a boardwalk, a sandy shore, a vegetable garden.
 Participants can watch live, in lockstep, from their own devices.
 
 This document covers **installing and running it on a server**. For *why* the
@@ -174,6 +174,13 @@ source → generate the sealed commitment (show it to the audience) → wait at
 least 20 seconds and collect the audience value → start. Viewers on the watch
 link see the commitment first, then the race begins on every screen together.
 Full walkthrough in [DESIGN.md](DESIGN.md).
+
+When a race ends, viewers keep its results on screen (and can download the
+standings CSV, the results post and the receipt). **Before hosting another
+race**, press **Clear last race from viewers' screens** at the top of the setup
+page: every viewer goes back to the lobby, where they'll see your new
+commitment. Clearing a real race that is still playing asks first, because it
+is logged as cut short and viewers are told about it at the next race.
 
 ---
 
